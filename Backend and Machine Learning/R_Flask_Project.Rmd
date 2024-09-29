@@ -1,0 +1,249 @@
+---
+title: "R_Flask_Project"
+output: html_document
+date: "2024-09-01"
+---
+
+```{r setup}
+library(dplyr)
+library(tidyr)
+library(ClusterR)
+library(ggplot2)
+library(tidyverse)
+```
+
+```{r preliminary data analysis}
+# Load required libraries
+library(ggplot2)
+library(dplyr)
+
+# Load the datasets
+movies <- read.csv("movies.csv")
+ratings <- read.csv("ratings.csv")
+links <- read.csv("links.csv")
+
+# Check the structure of the datasets
+str(movies)
+str(ratings)
+str(links)
+
+# Summary of the datasets
+summary(movies)
+summary(ratings)
+summary(links)
+
+# Count the number of movies by genre (genres are combined in the 'genres' column)
+# Split genres into separate rows for more detailed analysis
+movies_genres <- movies %>%
+  separate_rows(genres, sep = "\\|") %>%
+  group_by(genres) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+# Plot the count of movies by genre
+ggplot(movies_genres, aes(x = reorder(genres, -count), y = count)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Count of Movies by Genre", x = "Genre", y = "Count")
+
+# Distribution of ratings
+ggplot(ratings, aes(x = rating)) +
+  geom_histogram(binwidth = 0.5, fill = "coral", color = "black") +
+  labs(title = "Distribution of Ratings", x = "Rating", y = "Count")
+
+# Number of ratings per movie
+ratings_per_movie <- ratings %>%
+  group_by(movieId) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+# Plot the number of ratings per movie (top 20)
+top_20_movies <- head(ratings_per_movie, 20)
+ggplot(top_20_movies, aes(x = reorder(movieId, count), y = count)) +
+  geom_bar(stat = "identity", fill = "darkgreen") +
+  labs(title = "Top 20 Movies with Most Ratings", x = "Movie ID", y = "Number of Ratings")
+
+# Check for missing values in the links dataset
+missing_links <- sum(is.na(links$tmdbId))
+
+# Output the number of missing TMDB IDs
+cat("Number of missing TMDB IDs:", missing_links)
+
+# Merge the movies and ratings datasets
+movies_ratings <- merge(movies, ratings, by = "movieId")
+
+# Average rating for each movie
+avg_ratings <- movies_ratings %>%
+  group_by(title) %>%
+  summarise(avg_rating = mean(rating), rating_count = n()) %>%
+  arrange(desc(avg_rating))
+
+# Plot top 10 highest-rated movies with more than 100 ratings
+top_rated_movies <- avg_ratings %>%
+  filter(rating_count > 100) %>%
+  top_n(10, wt = avg_rating)
+
+ggplot(top_rated_movies, aes(x = reorder(title, avg_rating), y = avg_rating)) +
+  geom_bar(stat = "identity", fill = "purple") +
+  coord_flip() +
+  labs(title = "Top 10 Highest Rated Movies (with > 100 ratings)", x = "Movie Title", y = "Average Rating")
+```
+
+```{r scraping test}
+library(httr)
+
+url <- "https://api.themoviedb.org/3/movie/862"
+
+queryString <- list(language = "en-US")
+
+# Add your bearer token here that you get from TMDB
+response <- VERB("GET", url, query = queryString, add_headers('Authorization' = ''), content_type("application/octet-stream"), accept("application/json"))
+
+content(response, "text")
+```
+
+```{r full scrapping}
+# Load necessary libraries
+library(httr)
+library(jsonlite)
+
+# Read the CSV file
+movie_data <- read.csv("links.csv")
+
+# Extract the tmdbId column
+tmdb_ids <- movie_data$tmdbId
+
+# Initialize an empty list to store the JSON responses
+json_list <- list()
+
+# Your API key and base URL from TMDB
+api_key <- ""
+base_url <- "https://api.themoviedb.org/3/movie/"
+
+# Loop over each tmdbId and make API requests
+for (tmdb_id in tmdb_ids) {
+  url <- paste0(base_url, tmdb_id)
+  queryString <- list(language = "en-US")
+  
+  response <- VERB("GET", url, query = queryString, 
+                   add_headers('Authorization' = api_key),
+                   content_type("application/octet-stream"), 
+                   accept("application/json"))
+  
+  # Parse the JSON content
+  json_content <- content(response, "text")
+  
+  # Append the JSON content to the list
+  json_list <- append(json_list, list(json_content))
+  
+  # Optional: Print progress
+  cat("Processed tmdbId:", tmdb_id, "\n")
+}
+
+# Export the list of JSON objects to a file
+writeLines(json_list, "movie_data.json")
+
+cat("Data export complete. JSON saved to movie_data.json\n")
+```
+
+```{r wrangling}
+# Load necessary libraries
+library(dplyr)
+library(readr)
+library(jsonlite)
+
+# Load the movies.csv file
+movies <- read_csv("movies.csv")
+
+# Load the links.csv file
+links <- read_csv("links.csv")
+
+# Add the "tt" prefix to the imdbId in links.csv
+links <- links %>%
+  mutate(imdbId = paste0("tt", imdbId))
+
+# Initialize an empty list to store each parsed JSON line with relevant columns
+json_list <- list()
+
+# Open the JSON file and read it line by line
+con <- file("movie_data.json", "r")
+while (TRUE) {
+  line <- readLines(con, n = 1, warn = FALSE)
+  if (length(line) == 0) {
+    break
+  }
+  
+  # Try to parse the JSON and only extract the necessary fields
+  json_parsed <- tryCatch(fromJSON(line, flatten = TRUE), error = function(e) NULL)
+  
+  if (!is.null(json_parsed)) {
+    # Check and handle missing fields by assigning NA if the field doesn't exist or is empty
+    imdb_id <- if (!is.null(json_parsed$imdb_id) && length(json_parsed$imdb_id) > 0) json_parsed$imdb_id else NA
+    original_title <- if (!is.null(json_parsed$original_title) && length(json_parsed$original_title) > 0) json_parsed$original_title else NA
+    overview <- if (!is.null(json_parsed$overview) && length(json_parsed$overview) > 0) json_parsed$overview else NA
+    poster_path <- if (!is.null(json_parsed$poster_path) && length(json_parsed$poster_path) > 0) json_parsed$poster_path else NA
+    backdrop_path <- if (!is.null(json_parsed$belongs_to_collection$backdrop_path) && 
+                         length(json_parsed$belongs_to_collection$backdrop_path) > 0) {
+      json_parsed$belongs_to_collection$backdrop_path
+    } else {
+      NA
+    }
+    
+    # Create a data frame for this row and append it to the list
+    json_list <- append(json_list, list(
+      data.frame(imdb_id = imdb_id,
+                 original_title = original_title,
+                 overview = overview,
+                 poster_path = poster_path,
+                 backdrop_path = backdrop_path,
+                 stringsAsFactors = FALSE)
+    ))
+  }
+}
+close(con)
+
+# Combine the list into a single data frame
+json_data <- bind_rows(json_list)
+
+# Merge the links.csv with json_data using imdbId and imdb_id for matching
+links_json_combined <- links %>%
+  left_join(json_data, by = c("imdbId" = "imdb_id"))
+
+# Merge the combined data with movies.csv by movieId
+final_combined <- movies %>%
+  left_join(links_json_combined, by = "movieId")
+
+# Write the final combined data to a new CSV file
+write_csv(final_combined, "combined_movies_with_json.csv")
+
+# View the first few rows of the final combined dataset
+head(final_combined)
+```
+
+```{r wrangling user id}
+# Load necessary libraries
+library(dplyr)
+library(readr)
+
+# Load the ratings data
+ratings <- read_csv("ratings.csv")
+
+# Find duplicate userId
+duplicate_users <- ratings %>%
+  group_by(userId) %>%
+  filter(n() > 1) %>%
+  distinct(userId)  # Ensure unique userId
+
+# Create a new column called "password" with the value "pass"
+# Create a new column called "username" by concatenating "user" with userId
+duplicate_users <- duplicate_users %>%
+  mutate(password = "pass", 
+         username = paste0("user", userId)) %>%
+  select(userId, username, password)  # Select userId, username, and password columns
+
+# View the result
+print(duplicate_users)
+
+# Optionally, save the result to a new CSV file
+write_csv(duplicate_users, "users.csv")
+```
