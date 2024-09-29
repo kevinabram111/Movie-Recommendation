@@ -11,7 +11,7 @@ How to run the Backend:
 3. Go to the terminal and install surprise: pip install scikit-surprise
 4. In that directory in the terminal, just type flask --flask_project run to run the app
 5. The local server will run locally. It will usually be http://127.0.0.1:5000
-6. You can then try out the endpoints, for example http://127.0.0.1:5000/user/1/movies
+6. You can then try out the endpoints, for example, http://127.0.0.1:5000/user/1/movies
 
 How to run the Rmd?
 1. Install RStudio first

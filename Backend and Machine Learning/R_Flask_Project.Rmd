@@ -41,7 +41,7 @@ movies_genres <- movies %>%
   arrange(desc(count))
 
 # Plot the count of movies by genre
-ggplot(movies_genres, aes(x = reorder(genres, -count), y = count)) +
+ggplot(movies_genres, aes(x = reorder(genres, count), y = count)) +
   geom_bar(stat = "identity", fill = "steelblue") +
   coord_flip() +
   labs(title = "Count of Movies by Genre", x = "Genre", y = "Count")
@@ -59,7 +59,7 @@ ratings_per_movie <- ratings %>%
 
 # Plot the number of ratings per movie (top 20)
 top_20_movies <- head(ratings_per_movie, 20)
-ggplot(top_20_movies, aes(x = reorder(movieId, count), y = count)) +
+ggplot(top_20_movies, aes(x = reorder(movieId, -count), y = count)) +
   geom_bar(stat = "identity", fill = "darkgreen") +
   labs(title = "Top 20 Movies with Most Ratings", x = "Movie ID", y = "Number of Ratings")
 
@@ -96,8 +96,8 @@ url <- "https://api.themoviedb.org/3/movie/862"
 
 queryString <- list(language = "en-US")
 
-# Add your bearer token here that you get from TMDB
-response <- VERB("GET", url, query = queryString, add_headers('Authorization' = ''), content_type("application/octet-stream"), accept("application/json"))
+# Your API key and base URL
+response <- VERB("GET", url, query = queryString, add_headers(''), content_type("application/octet-stream"), accept("application/json"))
 
 content(response, "text")
 ```
@@ -116,7 +116,7 @@ tmdb_ids <- movie_data$tmdbId
 # Initialize an empty list to store the JSON responses
 json_list <- list()
 
-# Your API key and base URL from TMDB
+# Your API key and base URL
 api_key <- ""
 base_url <- "https://api.themoviedb.org/3/movie/"
 
@@ -147,6 +147,8 @@ cat("Data export complete. JSON saved to movie_data.json\n")
 ```
 
 ```{r wrangling}
+# This code is to combine several data into the movies data set, like imdb_id, original_title, overview, poster_path, backdrop_path and many more
+
 # Load necessary libraries
 library(dplyr)
 library(readr)
